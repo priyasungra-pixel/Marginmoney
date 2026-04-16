@@ -67,14 +67,23 @@ function renderTable(data) {
         const { name, ivrs } = parseCustomerName(row['Customer Name']);
         
         const tr = document.createElement('tr');
+
+        // Safe text population to avoid XSS
+        const td = (val) => {
+            const span = document.createElement('span');
+            span.textContent = val;
+            return span.outerHTML;
+        };
+
         tr.innerHTML = `
             <td><input type="checkbox" class="row-checkbox" value="${globalIndex}" onclick="updateBulkBtn()"></td>
-            <td><strong>${row['Receipt No']}</strong></td>
-            <td>${row['Payment Receiving Date']}</td>
-            <td>${name}</td>
-            <td><code>${ivrs}</code></td>
-            <td>₹${row['Amount']}</td>
-            <td class="text-right">
+            <td><strong>${td(row['Receipt No'])}</strong></td>
+            <td>${td(row['Payment Receiving Date'])}</td>
+            <td>${td(name)}</td>
+            <td><code>${td(ivrs)}</code></td>
+            <td>₹${td(row['Amount'])}</td>
+            <td class="text-right action-cell">
+                <button class="view-btn" onclick="viewReceipt(${globalIndex})">View</button>
                 <button class="download-btn" onclick="generateSinglePDF(${globalIndex})">Download</button>
             </td>
         `;
@@ -118,31 +127,30 @@ function updateBulkBtn() {
     }
 }
 
-async function generateSinglePDF(index) {
+async function generateSinglePDF(index, btn) {
     try {
         const row = receiptsData[index];
         if (!row) throw new Error("Row data not found");
 
-        const btn = event.target;
-        const originalText = btn.innerText;
-        btn.innerText = 'Creating...';
-        btn.disabled = true;
+        // btn is passed explicitly; fall back to event.target for direct button clicks
+        if (!btn && event && event.target) btn = event.target;
+        const originalText = btn ? btn.innerText : '';
+        if (btn) { btn.innerText = 'Creating...'; btn.disabled = true; }
 
         await prepareTemplate(row);
-        
+
         const element = document.getElementById('receipt-template');
         const opt = {
-            margin: 5,
+            margin: [2, 5, 5, 5],
             filename: `Receipt_${row['Receipt No']}_${row['Customer Name'].split(' ')[0]}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 3, useCORS: true, logging: false },
+            html2canvas: { scale: 3, useCORS: true, allowTaint: true, logging: false },
             jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
         };
 
         await html2pdf().set(opt).from(element).save();
-        
-        btn.innerText = originalText;
-        btn.disabled = false;
+
+        if (btn) { btn.innerText = originalText; btn.disabled = false; }
     } catch (err) {
         console.error('PDF Generation Error:', err);
         alert('Error generating PDF: ' + err.message);
@@ -151,7 +159,7 @@ async function generateSinglePDF(index) {
 
 async function prepareTemplate(row) {
     const { name, ivrs } = parseCustomerName(row['Customer Name']);
-    
+
     document.getElementById('pdf-receipt-no').innerText = row['Receipt No'] || '-';
     document.getElementById('pdf-date').innerText = row['Payment Receiving Date'] || '-';
     document.getElementById('pdf-cust-name').innerText = name || '-';
@@ -161,20 +169,36 @@ async function prepareTemplate(row) {
     document.getElementById('pdf-mode').innerText = row['Mode of Payment'] || '-';
     document.getElementById('pdf-amount').innerText = '₹' + (row['Amount'] || '0');
     document.getElementById('pdf-ack-amount').innerText = '₹' + (row['Amount'] || '0');
-    
+
     const stampImg = document.getElementById('pdf-stamp');
-    stampImg.src = ATVIAN_SEAL;
+    stampImg.src = 'seal.jpg?' + Date.now(); // Add cache buster
 
     // Wait for all images to be ready before PDF capture
     const images = document.querySelectorAll('#receipt-template img');
     const promises = Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-            img.onload = resolve;
-            img.onerror = resolve;
+        return new Promise((resolve) => {
+            if (img.complete && img.naturalWidth > 0) {
+                resolve();
+            } else {
+                const onLoad = () => {
+                    img.removeEventListener('load', onLoad);
+                    img.removeEventListener('error', onError);
+                    resolve();
+                };
+                const onError = () => {
+                    console.warn('Image failed to load:', img.src);
+                    img.removeEventListener('load', onLoad);
+                    img.removeEventListener('error', onError);
+                    resolve();
+                };
+                img.addEventListener('load', onLoad);
+                img.addEventListener('error', onError);
+            }
         });
     });
     await Promise.all(promises);
+    // Give browser a frame to paint images before html2canvas captures
+    await new Promise(r => setTimeout(r, 300));
 }
 
 async function handleBulkDownload() {
@@ -184,14 +208,37 @@ async function handleBulkDownload() {
     btn.innerText = 'Processing...';
 
     for(let check of checked) {
-        const idx = check.value;
-        await generateSinglePDF(idx);
+        const idx = parseInt(check.value);
+        await generateSinglePDF(idx, null);
         // Small delay between downloads to prevent browser blocking
         await new Promise(r => setTimeout(r, 1000));
     }
 
     btn.disabled = false;
     updateBulkBtn();
+}
+
+async function viewReceipt(index) {
+    const row = receiptsData[index];
+    if (!row) return;
+
+    await prepareTemplate(row);
+
+    // Clone the populated template into the modal
+    const source = document.getElementById('receipt-template');
+    const clone = source.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.style.cssText = 'display:block; margin: 0 auto;';
+
+    const body = document.getElementById('modal-preview-body');
+    body.innerHTML = '';
+    body.appendChild(clone);
+
+    // Wire the Download button to this specific row
+    const dlBtn = document.getElementById('modal-download-btn');
+    dlBtn.onclick = () => generateSinglePDF(index, dlBtn);
+
+    document.getElementById('preview-modal').style.display = 'flex';
 }
 
 function closeModal() {

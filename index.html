@@ -82,8 +82,10 @@
     <div id="pdf-template-container" style="position: absolute; left: -9999px; top: -9999px;">
         <div id="receipt-template" class="receipt-pdf">
             <div class="pdf-inner">
+
                 <div class="pdf-title">Cash Receipt</div>
-                
+                <hr class="pdf-title-rule">
+
                 <div class="pdf-header">
                     <div class="company-info">
                         <h1 class="comp-name">Atvian R-Solar Energy Pvt. Ltd.</h1>
@@ -94,6 +96,7 @@
                         <img id="pdf-logo" src="logo.png" alt="Logo">
                     </div>
                 </div>
+                <hr class="pdf-header-rule">
 
                 <div class="pdf-metadata">
                     <div class="meta-row">
@@ -134,20 +137,20 @@
                 </div>
 
                 <div class="pdf-ack">
-                    We acknowledge receipt of <span id="pdf-ack-amount">₹21,666</span> from the above-mentioned customer as payment.
+                    We acknowledge receipt of <strong id="pdf-ack-amount">₹21,666</strong> from the above-mentioned customer as payment.
                 </div>
 
                 <div class="pdf-footer">
-                    <div class="footer-bottom">
-                        <div class="signature-area">
-                            <div class="stamp-container">
-                                <img id="pdf-stamp" src="" class="comp-stamp">
-                            </div>
-                            <div class="sig-line">Authorized Signatory</div>
+                    <div class="signature-area">
+                        <div class="stamp-container">
+                            <img id="pdf-stamp" src="" class="comp-stamp">
                         </div>
+                        <div class="sig-line">Authorized Signatory</div>
                     </div>
+                    <hr class="pdf-footer-rule">
                     <div class="website">www.myrsolar.com</div>
                 </div>
+
             </div>
         </div>
     </div>
